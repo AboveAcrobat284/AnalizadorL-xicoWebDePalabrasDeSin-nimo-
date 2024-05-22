@@ -1,6 +1,7 @@
-import tkinter as tk
-from tkinter import ttk
+from flask import Flask, request, render_template_string
 import re
+
+app = Flask(__name__)
 
 # Diccionario de sinónimos
 synonyms_dict = {
@@ -63,9 +64,10 @@ def lexical_analyzer(text, synonyms_dict):
 
     for line_number, line in enumerate(lines, start=1):
         for match in pattern.finditer(line):
-            word = match.group()
+            word = match.group().lower()  # Convertir la palabra a minúsculas para comparar
             if word in synonyms_dict:
-                results.append((word, synonyms_dict[word], "X", "", "", line_number, ""))
+                synonym = synonyms_dict[word]  # Obtener el sinónimo
+                results.append((word, synonym, "X", "", "", line_number, ""))
             elif word.isdigit():
                 results.append((word, "", "", "", "X", line_number, ""))
             elif not word.isalnum():
@@ -75,51 +77,116 @@ def lexical_analyzer(text, synonyms_dict):
 
     return results
 
-def analyze_text():
-    input_text = text_entry.get("1.0", tk.END).strip()
-    analysis_result = lexical_analyzer(input_text, synonyms_dict)
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    analysis_result = []
+    if request.method == 'POST':
+        input_text = request.form['input_text']
+        analysis_result = lexical_analyzer(input_text, synonyms_dict)
 
-    # Limpiar la tabla
-    for row in tree.get_children():
-        tree.delete(row)
+    return render_template_string('''
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Analizador Léxico con Sinónimos</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    background-color: #f4f4f4;
+                    margin: 0;
+                    padding: 0;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                }
+                .container {
+                    width: 60%;
+                    background-color: #fff;
+                    padding: 20px;
+                    border-radius: 10px;
+                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                }
+                h1 {
+                    text-align: center;
+                    color: #333;
+                }
+                form {
+                    text-align: center;
+                }
+                textarea {
+                    width: 100%;
+                    padding: 10px;
+                    margin-bottom: 10px;
+                    border: 1px solid #ccc;
+                    border-radius: 5px;
+                }
+                input[type="submit"] {
+                    padding: 10px 20px;
+                    background-color: #007bff;
+                    color: #fff;
+                    border: none;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    transition: background-color 0.3s ease;
+                }
+                input[type="submit"]:hover {
+                    background-color: #0056b3;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                th, td {
+                    padding: 10px;
+                    text-align: left;
+                    border-bottom: 1px solid #ddd;
+                }
+                th {
+                    background-color: #f2f2f2;
+                }
+                .center {
+                    text-align: center;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Analizador Léxico con Sinónimos</h1>
+                <form method="POST">
+                    <textarea name="input_text" rows="10" placeholder="Ingrese el texto a analizar...">{{ request.form['input_text'] if request.method == 'POST' else '' }}</textarea><br>
+                    <input type="submit" value="Analizar">
+                </form>
+                {% if analysis_result %}
+                <table>
+                    <tr>
+                        <th>Palabra ingresada</th>
+                        <th>Sinónimo de palabra</th>
+                        <th class="center">Sinónimo</th>
+                        <th class="center">Carácter</th>
+                        <th class="center">Dígito</th>
+                        <th class="center">Línea</th>
+                        <th class="center">Palabra no encontrada</th>
+                    </tr>
+                    {% for result in analysis_result %}
+                    <tr>
+                        <td>{{ result[0] }}</td>
+                        <td>{{ result[1] }}</td>
+                        <td class="center">{{ result[2] }}</td>
+                        <td class="center">{{ result[3] }}</td>
+                        <td class="center">{{ result[4] }}</td>
+                        <td class="center">{{ result[5] }}</td>
+                        <td class="center">{{ result[6] }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+                {% endif %}
+            </div>
+        </body>
+        </html>
+    ''', analysis_result=analysis_result)
 
-    # Insertar resultados en la tabla
-    for word, synonym, synonym_mark, char_mark, digit_mark, line_number, not_found_mark in analysis_result:
-        tree.insert("", "end", values=(word, synonym, synonym_mark, char_mark, digit_mark, line_number, not_found_mark))
-
-# Crear la ventana principal
-root = tk.Tk()
-root.title("Analizador Léxico con Sinónimos")
-
-# Crear widgets
-frame = tk.Frame(root)
-frame.pack(pady=10, padx=10)
-
-text_label = tk.Label(frame, text="Ingrese el texto a analizar:")
-text_label.pack(anchor="w")
-
-text_entry = tk.Text(frame, height=10, width=50)
-text_entry.pack()
-
-analyze_button = tk.Button(frame, text="Analizar", command=analyze_text)
-analyze_button.pack(pady=10)
-
-# Crear el Treeview para mostrar los resultados
-columns = ("Palabra ingresada", "Sinónimo de palabra", "Sinónimo", "Carácter", "Dígito", "Línea", "Palabra no encontrada")
-tree = ttk.Treeview(frame, columns=columns, show="headings")
-tree.heading("Palabra ingresada", text="Palabra ingresada")
-tree.heading("Sinónimo de palabra", text="Sinónimo de palabra")
-tree.heading("Sinónimo", text="Sinónimo")
-tree.heading("Carácter", text="Carácter")
-tree.heading("Dígito", text="Dígito")
-tree.heading("Línea", text="Línea")
-tree.heading("Palabra no encontrada", text="Palabra no encontrada")
-
-tree.pack()
-
-# Ajustar las columnas
-for col in columns:
-    tree.column(col, width=190, anchor="center")
-
-# Iniciar el bucle principal de la aplicación
-root.mainloop()
+if __name__ == '__main__':
+    app.run(debug=True)
